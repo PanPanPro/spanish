@@ -1,0 +1,397 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>¡Hola! 西班牙语学习小程序</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Montserrat', sans-serif;
+      background-image: url('https://example.com/flamenco-bg.jpg'); /* 替换为弗拉明戈或西班牙地标背景 */
+      background-size: cover;
+      background-attachment: fixed;
+      color: #333;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: rgba(255, 255, 255, 0.9);
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    .header {
+      background-color: #FF0000;
+      color: #FFC107;
+      padding: 20px;
+      text-align: center;
+      border-radius: 10px 10px 0 0;
+    }
+    .lesson-card, .quiz-card {
+      border: 2px solid #FFC107;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+      transition: transform 0.2s;
+    }
+    .lesson-card:hover, .quiz-card:hover {
+      transform: scale(1.02);
+    }
+    .audio-btn {
+      background-color: #FF0000;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .audio-btn:hover {
+      background-color: #cc0000;
+    }
+    .progress-bar {
+      background-color: #FFC107;
+      height: 10px;
+      border-radius: 5px;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="text-4xl font-bold">¡Hola! 西班牙语学习</h1>
+      <p class="text-lg">为西班牙旅行打造的实用语言课程</p>
+    </div>
+
+    <!-- 进度显示 -->
+    <div class="mt-6">
+      <h2 class="text-xl font-bold text-red-600">学习进度</h2>
+      <div class="bg-gray-200 h-10 rounded mt-2">
+        <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+      </div>
+      <p id="progress-text" class="mt-2 text-gray-600"></p>
+    </div>
+
+    <!-- 课程导航 -->
+    <div class="mt-6">
+      <h2 class="text-2xl font-bold text-red-600">课程列表</h2>
+      <div id="lesson-list" class="mt-4"></div>
+    </div>
+
+    <!-- 课程内容 -->
+    <div id="lesson-content" class="hidden mt-6">
+      <h2 class="text-2xl font-bold text-red-600">课程内容</h2>
+      <div id="vocabulary" class="mt-4">
+        <h3 class="text-xl font-semibold">词汇</h3>
+        <ul id="vocab-list" class="list-disc pl-6"></ul>
+      </div>
+      <div id="sentences" class="mt-4">
+        <h3 class="text-xl font-semibold">句型</h3>
+        <ul id="sentence-list" class="list-disc pl-6"></ul>
+      </div>
+      <div id="dialogue" class="mt-4">
+        <h3 class="text-xl font-semibold">对话</h3>
+        <p id="dialogue-text"></p>
+        <button class="audio-btn mt-2" onclick="playDialogue()">播放对话</button>
+      </div>
+      <div id="culture" class="mt-4">
+        <h3 class="text-xl font-semibold">文化小贴士</h3>
+        <p id="culture-text"></p>
+      </div>
+      <button onclick="startQuiz()" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">开始测试</button>
+      <button onclick="backToLessons()" class="mt-4 ml-2 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">返回课程列表</button>
+    </div>
+
+    <!-- 测试模块 -->
+    <div id="quiz-content" class="hidden mt-6">
+      <h2 class="text-2xl font-bold text-red-600">选择题测试</h2>
+      <div id="quiz-question" class="quiz-card"></div>
+      <div id="quiz-options" class="mt-4"></div>
+      <p id="quiz-feedback" class="mt-4 text-lg"></p>
+      <button onclick="nextQuestion()" class="mt-4 bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">下一题</button>
+      <button onclick="backToLessons()" class="mt-4 ml-2 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">返回课程列表</button>
+    </div>
+  </div>
+
+  <script>
+    // 课程数据（示例：3课，完整版可扩展到25课）
+    const lessons = {
+      "1-1": {
+        level: 1,
+        title: "问候与介绍",
+        vocabulary: [
+          { word: "Hola", meaning: "你好", audio: "https://example.com/hola.mp3" },
+          { word: "Gracias", meaning: "谢谢", audio: "https://example.com/gracias.mp3" },
+          { word: "Por favor", meaning: "请", audio: "https://example.com/porfavor.mp3" },
+          { word: "Adiós", meaning: "再见", audio: "https://example.com/adios.mp3" },
+          { word: "Me llamo", meaning: "我的名字是", audio: "https://example.com/mellamo.mp3" }
+        ],
+        sentences: [
+          { sentence: "¡Hola! ¿Cómo estás?", meaning: "你好！你好吗？" },
+          { sentence: "Me llamo [tu nombre].", meaning: "我的名字是[你的名字]。" },
+          { sentence: "Gracias por tu ayuda.", meaning: "谢谢你的帮助。" }
+        ],
+        dialogue: {
+          text: "A: ¡Hola! Me llamo Ana. ¿Y tú?\nB: Hola, Ana. Me llamo Juan.",
+          audio: "https://example.com/dialogue1-1.mp3"
+        },
+        culture: "在西班牙，人们见面时通常说‘Hola’并微笑，显得友好。正式场合可能用‘Buenos días’（早上好）。",
+        quiz: [
+          { question: "¿Qué significa ‘Hola’ en chino?", options: ["你好", "谢谢", "再见", "请"], answer: "你好" },
+          { question: "Completa: Me llamo ____.", options: ["tú", "Ana", "tu nombre", "gracias"], answer: "tu nombre" },
+          { question: "¿Cómo dices ‘谢谢’ en español?", options: ["Adiós", "Gracias", "Hola", "Por favor"], answer: "Gracias" },
+          { question: "¿Qué dices al despedirte?", options: ["Hola", "Adiós", "Gracias", "Me llamo"], answer: "Adiós" },
+          { question: "¿Cuál es una respuesta a ‘¿Cómo estás?’?", options: ["Me llamo Juan", "Bien, gracias", "Por favor", "Adiós"], answer: "Bien, gracias" }
+        ]
+      },
+      "2-1": {
+        level: 2,
+        title: "餐厅用语",
+        vocabulary: [
+          { word: "Menú", meaning: "菜单", audio: "https://example.com/menu.mp3" },
+          { word: "Camarero", meaning: "服务员（男）", audio: "https://example.com/camarero.mp3" },
+          { word: "Cuenta", meaning: "账单", audio: "https://example.com/cuenta.mp3" },
+          { word: "Agua", meaning: "水", audio: "https://example.com/agua.mp3" },
+          { word: "¿Cuánto cuesta?", meaning: "多少钱？", audio: "https://example.com/cuanto.mp3" }
+        ],
+        sentences: [
+          { sentence: "¿Puedo ver el menú, por favor?", meaning: "请给我看菜单。" },
+          { sentence: "Quiero un agua, por favor.", meaning: "请给我一杯水。" },
+          { sentence: "La cuenta, por favor.", meaning: "请结账。" }
+        ],
+        dialogue: {
+          text: "A: Camarero, ¿puedo ver el menú?\nB: Claro, aquí tiene.\nA: Quiero un agua y paella, por favor.\nB: Muy bien, enseguida.",
+          audio: "https://example.com/dialogue2-1.mp3"
+        },
+        culture: "在西班牙餐厅，服务员通常不会主动提供账单，需主动说‘La cuenta, por favor’。小费不是必须，但可留1-2欧元表示满意。",
+        quiz: [
+          { question: "¿Qué significa ‘Menú’?", options: ["菜单", "账单", "水", "服务员"], answer: "菜单" },
+          { question: "¿Cómo pides agua?", options: ["Quiero un agua", "La cuenta", "¿Cuánto cuesta?", "Camarero"], answer: "Quiero un agua" },
+          { question: "¿Qué dices para pedir la cuenta?", options: ["Menú, por favor", "La cuenta, por favor", "Agua, por favor", "¿Puedo ver?"], answer: "La cuenta, por favor" },
+          { question: "¿Quién es el ‘Camarero’?", options: ["客户", "服务员", "厨师", "老板"], answer: "服务员" },
+          { question: "¿Cómo preguntas el precio?", options: ["¿Cuánto cuesta?", "Quiero un agua", "La cuenta", "Menú"], answer: "¿Cuánto cuesta?" }
+        ]
+      },
+      "3-1": {
+        level: 3,
+        title: "旅行应急",
+        vocabulary: [
+          { word: "Ayuda", meaning: "帮助", audio: "https://example.com/ayuda.mp3" },
+          { word: "¿Dónde está?", meaning: "在哪里？", audio: "https://example.com/donde.mp3" },
+          { word: "Perdido", meaning: "迷路", audio: "https://example.com/perdido.mp3" },
+          { word: "Policía", meaning: "警察", audio: "https://example.com/policia.mp3" },
+          { word: "Hospital", meaning: "医院", audio: "https://example.com/hospital.mp3" }
+        ],
+        sentences: [
+          { sentence: "¡Ayuda, por favor!", meaning: "请帮忙！" },
+          { sentence: "¿Dónde está el hospital?", meaning: "医院在哪里？" },
+          { sentence: "Estoy perdido.", meaning: "我迷路了。" }
+        ],
+        dialogue: {
+          text: "A: ¡Ayuda! Estoy perdido. ¿Dónde está la estación?\nB: Tranquilo, está a dos calles. Sigue recto.\nA: ¡Gracias!",
+          audio: "https://example.com/dialogue3-1.mp3"
+        },
+        culture: "西班牙人通常乐于助人，若迷路可向路人或警察求助。说‘Por favor’和‘Gracias’会让交流更友好。",
+        quiz: [
+          { question: "¿Qué significa ‘Ayuda’?", options: ["帮助", "医院", "警察", "迷路"], answer: "帮助" },
+          { question: "¿Cómo dices ‘迷路了’?", options: ["Estoy perdido", "¿Dónde está?", "¡Ayuda!", "Policía"], answer: "Estoy perdido" },
+          { question: "¿Dónde buscarías un ‘Hospital’?", options: ["餐厅", "医院", "车站", "商店"], answer: "医院" },
+          { question: "¿A quién llamas ‘Policía’?", options: ["医生", "警察", "服务员", "路人"], answer: "警察" },
+          { question: "¿Cómo preguntas por un lugar?", options: ["¿Dónde está?", "Estoy perdido", "¡Ayuda!", "Hospital"], answer: "¿Dónde está?" }
+        ]
+      }
+      // 更多课程可按此格式添加，扩展到25课
+    };
+
+    let currentLesson = null;
+    let currentQuestion = 0;
+    let progress = JSON.parse(localStorage.getItem("spanishProgress")) || {};
+
+    // 初始化
+    function init() {
+      updateProgress();
+      renderLessonList();
+      document.getElementById("lesson-list").classList.remove("hidden");
+    }
+
+    // 更新进度
+    function updateProgress() {
+      const totalLessons = Object.keys(lessons).length;
+      const completedLessons = Object.keys(progress).length;
+      const percentage = (completedLessons / totalLessons) * 100;
+      document.getElementById("progress-bar").style.width = `${percentage}%`;
+      document.getElementById("progress-text").textContent = `已完成 ${completedLessons}/${totalLessons} 课 (${Math.round(percentage)}%)`;
+    }
+
+    // 渲染课程列表
+    function renderLessonList() {
+      const lessonList = document.getElementById("lesson-list");
+      lessonList.innerHTML = "";
+      const levels = { 1: "初级", 2: "中级", 3: "旅行准备" };
+      Object.entries(levels).forEach(([level, title]) => {
+        const levelDiv = document.createElement("div");
+        levelDiv.innerHTML = `<h3 class="text-xl font-semibold text-yellow-600 mt-4">${title}</h3>`;
+        lessonList.appendChild(levelDiv);
+        Object.entries(lessons).forEach(([id, lesson]) => {
+          if (lesson.level == level) {
+            const card = document.createElement("div");
+            card.className = "lesson-card";
+            card.innerHTML = `
+              <h4 class="text-lg font-semibold">${lesson.title}</h4>
+              <p>词汇、句型、对话和测试</p>
+              <button onclick="startLesson('${id}')" class="mt-2 bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">
+                ${progress[id] ? "复习" : "开始学习"}
+              </button>
+            `;
+            levelDiv.appendChild(card);
+          }
+        });
+      });
+    }
+
+    // 开始课程
+    function startLesson(lessonId) {
+      currentLesson = lessons[lessonId];
+      document.getElementById("lesson-list").classList.add("hidden");
+      document.getElementById("lesson-content").classList.remove("hidden");
+      document.getElementById("quiz-content").classList.add("hidden");
+
+      // 加载词汇
+      const vocabList = document.getElementById("vocab-list");
+      vocabList.innerHTML = "";
+      currentLesson.vocabulary.forEach(vocab => {
+        const li = document.createElement("li");
+        li.innerHTML = `${vocab.word} - ${vocab.meaning} <button class="audio-btn ml-2" onclick="playAudio('${vocab.audio}')">发音</button>`;
+        vocabList.appendChild(li);
+      });
+
+      // 加载句型
+      const sentenceList = document.getElementById("sentence-list");
+      sentenceList.innerHTML = "";
+      currentLesson.sentences.forEach(sentence => {
+        const li = document.createElement("li");
+        li.textContent = `${sentence.sentence} - ${sentence.meaning}`;
+        sentenceList.appendChild(li);
+      });
+
+      // 加载对话
+      document.getElementById("dialogue-text").textContent = currentLesson.dialogue.text;
+      document.getElementById("culture-text").textContent = currentLesson.culture;
+    }
+
+    // 播放音频
+    function playAudio(url) {
+      const audio = new Audio(url);
+      audio.play();
+    }
+
+    // 播放对话
+    function playDialogue() {
+      playAudio(currentLesson.dialogue.audio);
+    }
+
+    // 开始测试
+    function startQuiz() {
+      document.getElementById("lesson-content").classList.add("hidden");
+      document.getElementById("quiz-content").classList.remove("hidden");
+      currentQuestion = 0;
+      loadQuestion();
+    }
+
+    // 加载测试题目
+    function loadQuestion() {
+      const quiz = currentLesson.quiz[currentQuestion];
+      document.getElementById("quiz-question").textContent = quiz.question;
+      const optionsDiv = document.getElementById("quiz-options");
+      optionsDiv.innerHTML = "";
+      quiz.options.forEach(option => {
+        const button = document.createElement("button");
+        button.textContent = option;
+        button.className = "bg-yellow-500 text-white px-4 py-2 m-2 rounded hover:bg-yellow-600";
+        button.onclick = () => checkAnswer(option, quiz.answer, currentLesson.quiz.length);
+        optionsDiv.appendChild(button);
+      });
+      document.getElementById("quiz-feedback").textContent = "";
+    }
+
+    // 检查答案
+    function checkAnswer(selected, correct, totalQuestions) {
+      const feedback = document.getElementById("quiz-feedback");
+      if (selected === correct) {
+        feedback.textContent = "¡Correcto! 答对了！";
+        feedback.className = "text-green-600";
+      } else {
+        feedback.textContent = `Incorrecto. 正确答案是：${correct}`;
+        feedback.className = "text-red-600";
+      }
+      if (currentQuestion + 1 === totalQuestions && selected === correct) {
+        progress[currentLesson.title] = true;
+        localStorage.setItem("spanishProgress", JSON.stringify(progress));
+        updateProgress();
+      }
+    }
+
+    // 下一题
+    function nextQuestion() {
+      currentQuestion++;
+      if (currentQuestion < currentLesson.quiz.length) {
+        loadQuestion();
+      } else {
+        document.getElementById("quiz-question").textContent = "¡Test terminado! Has completado el test.";
+        document.getElementById("quiz-options").innerHTML = "";
+        document.getElementById("quiz-feedback").textContent = "";
+      }
+    }
+
+    // 返回课程列表
+    function backToLessons() {
+      document.getElementById("lesson-content").classList.add("hidden");
+      document.getElementById("quiz-content").classList.add("hidden");
+      document.getElementById("lesson-list").classList.remove("hidden");
+    }
+
+    // 初始化
+    init();
+  </script>
+</body>
+</html>
